@@ -1,0 +1,16 @@
+-s dir
+-n vzesync
+--license mit
+--architecture all
+--depends python3
+--depends python3-tomlkit
+--maintainer 'Sophonet <sophonet@sky.brightspace.de>'
+--after-install packaging/postinst.sh
+--before-remove packaging/preremove.sh
+--after-remove packaging/postremove.sh
+--description 'Tool for sending ir-ctl events on mqtt events.'
+--url "https://github.com/sophonet/mqtt2ir"
+--config-files /etc/mqtt2ir.toml
+mqtt2ir.py=/usr/bin/mqtt2ir.py
+mqtt2ir.toml=/etc/mqtt2ir.toml
+mqtt2ir.service=/lib/systemd/system/mqtt2ir.service

@@ -1,0 +1,19 @@
+[Unit]
+Description=IR control via MQTT (ir-ctl bridge)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/bin/mqtt2ir.py
+Restart=always
+RestartSec=5
+
+# Run unprivileged with a temporary user instead of root
+DynamicUser=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[mqttserver]
+host = "mqtt-server"
+port = 1883
+base_config = "multimediaremote/ir"
+# user = "mqttuser"
+# password = "mqttpassword"
+
+[ir]
+keymap = "/etc/ir/keytable.toml"
+device = "/dev/lirc0"
+gap = 20000
+
+[ir.carriers]
+default = 38000
+"*sony*" = 40000
