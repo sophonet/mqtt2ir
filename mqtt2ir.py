@@ -1,12 +1,14 @@
+"""Bridge MQTT button commands to infrared transmissions."""
+
 import fnmatch
 import json
 import logging
-import subprocess
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
-
+import subprocess
 import tomllib
+
+import paho.mqtt.client as mqtt  # pylint: disable=import-error
 
 # --- Configuration ---------------------------------------------------------
 
@@ -31,8 +33,13 @@ if not isinstance(IR_CARRIERS, dict) or "default" not in IR_CARRIERS:
     raise ValueError(
         "IR configuration must contain a [ir.carriers] table with a default"
     )
-for pattern, carrier in IR_CARRIERS.items():
-    if not isinstance(pattern, str) or type(carrier) is not int or carrier < 1:
+for carrier_pattern, carrier_frequency in IR_CARRIERS.items():
+    if (
+        not isinstance(carrier_pattern, str)
+        or not isinstance(carrier_frequency, int)
+        or isinstance(carrier_frequency, bool)
+        or carrier_frequency < 1
+    ):
         raise ValueError(
             "IR carrier patterns must map to positive integer frequencies"
         )
@@ -112,14 +119,18 @@ BUTTONS = list(BUTTON_TO_PROTOCOL)
 
 
 def state_topic():
+    """Return the MQTT topic used to publish command status."""
     return f"{BASE_TOPIC}/state"
 
 
 def carrier_for_protocol(protocol):
     """Return the first matching protocol carrier, or the default."""
-    for pattern, carrier in IR_CARRIERS.items():
-        if pattern != "default" and fnmatch.fnmatchcase(protocol, pattern):
-            return carrier
+    for configured_pattern, configured_carrier in IR_CARRIERS.items():
+        if (
+            configured_pattern != "default"
+            and fnmatch.fnmatchcase(protocol, configured_pattern)
+        ):
+            return configured_carrier
     return IR_CARRIERS["default"]
 
 
@@ -163,12 +174,23 @@ def publish_discovery(client):
 
 
 def set_online(client):
+    """Publish the bridge's online availability state."""
     client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)
 
 
 # --- MQTT callbacks --------------------------------------------------------
 
-def on_connect(client, userdata, flags, reason_code, properties=None):
+def on_connect(
+    client,
+    _userdata,
+    _flags,
+    reason_code,
+    _properties=None,
+):
+    """Subscribe to command and Home Assistant status topics after connecting.
+
+    The callback is invoked again automatically after MQTT reconnects.
+    """
     # paho 2.x passes a ReasonCode object, paho 1.x passes an int (0 = success)
     failed = (
         reason_code.is_failure
@@ -186,6 +208,7 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
 
 
 def handle_command(client, payload):
+    """Validate a command payload and send the requested IR key."""
     try:
         data = json.loads(payload)
         repeat = int(data["repeat"])
@@ -196,8 +219,7 @@ def handle_command(client, payload):
 
     # Only whitelisted values ever reach the command line
     if (
-        type(repeat) is not int
-        or repeat < 1
+        repeat < 1
         or not isinstance(button, str)
         or button not in BUTTONS
     ):
@@ -225,6 +247,7 @@ def handle_command(client, payload):
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         log.error("ir-ctl timed out: %s", args)
@@ -243,7 +266,8 @@ def handle_command(client, payload):
         client.publish(state_topic(), f"error: {repeat} {button}")
 
 
-def on_message(client, userdata, msg):
+def on_message(client, _userdata, msg):
+    """Handle Home Assistant status updates and incoming IR commands."""
     if msg.topic == HA_STATUS_TOPIC:
         # HA restarted: re-announce so entities reappear
         if msg.payload.decode(errors="ignore") == "online":
@@ -255,6 +279,7 @@ def on_message(client, userdata, msg):
 
 
 def main():
+    """Connect to MQTT and run the bridge event loop."""
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
     if MQTT_USER:
