@@ -28,10 +28,14 @@ IR_GAP = IR_CONFIG["gap"]
 IR_CARRIERS = IR_CONFIG["carriers"]
 
 if not isinstance(IR_CARRIERS, dict) or "default" not in IR_CARRIERS:
-    raise ValueError("IR configuration must contain a [ir.carriers] table with a default")
+    raise ValueError(
+        "IR configuration must contain a [ir.carriers] table with a default"
+    )
 for pattern, carrier in IR_CARRIERS.items():
     if not isinstance(pattern, str) or type(carrier) is not int or carrier < 1:
-        raise ValueError("IR carrier patterns must map to positive integer frequencies")
+        raise ValueError(
+            "IR carrier patterns must map to positive integer frequencies"
+        )
 
 DISCOVERY_PREFIX = "homeassistant"   # HA default
 BASE_TOPIC = "multimediaremote/ir"
@@ -40,7 +44,8 @@ if MQTT_CONFIG.get("base_topic"):
 
 COMMAND_TOPIC = f"{BASE_TOPIC}/set"
 AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
-HA_STATUS_TOPIC = f"{DISCOVERY_PREFIX}/status"  # HA publishes "online" here on start
+HA_STATUS_TOPIC = f"{DISCOVERY_PREFIX}/status"
+# Home Assistant publishes "online" here on start.
 
 DEVICE_INFO = {
     "identifiers": [BASE_TOPIC],
@@ -49,8 +54,12 @@ DEVICE_INFO = {
 
 # --- Helpers ---------------------------------------------------------------
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
 log = logging.getLogger("ir_mqtt")
+
 
 def parse_keymap(path):
     """Return button names from all protocols in an ir-keytable keymap."""
@@ -59,23 +68,35 @@ def parse_keymap(path):
 
     protocols = keymap.get("protocols")
     if not isinstance(protocols, list):
-        raise ValueError("Keymap must contain one or more [[protocols]] entries")
+        raise ValueError(
+            "Keymap must contain one or more [[protocols]] entries"
+        )
 
     button_to_protocol = {}
     for protocol in protocols:
-        scancodes = protocol.get("scancodes") if isinstance(protocol, dict) else None
+        scancodes = (
+            protocol.get("scancodes") if isinstance(protocol, dict) else None
+        )
         if not isinstance(scancodes, dict):
-            raise ValueError("Each keymap protocol must contain a [protocols.scancodes] table")
+            raise ValueError(
+                "Each keymap protocol must contain a "
+                "[protocols.scancodes] table"
+            )
         protocol_name = protocol.get("protocol")
         if not isinstance(protocol_name, str) or not protocol_name:
-            raise ValueError("Each keymap protocol must contain a non-empty protocol name")
+            raise ValueError(
+                "Each keymap protocol must contain a non-empty protocol name"
+            )
         for button in scancodes.values():
             if not isinstance(button, str) or not button:
-                raise ValueError("Keymap scancode values must be non-empty button names")
+                raise ValueError(
+                    "Keymap scancode values must be non-empty button names"
+                )
             invalid_chars = {"+", "#", "/", "\0"}
             if any(char in button for char in invalid_chars):
                 raise ValueError(
-                    f"Button name {button!r} contains characters invalid in a discovery topic"
+                    f"Button name {button!r} contains characters invalid in "
+                    "a discovery topic"
                 )
             if button in button_to_protocol:
                 raise ValueError(f"Duplicate button name in keymap: {button}")
@@ -95,7 +116,7 @@ def state_topic():
 
 
 def carrier_for_protocol(protocol):
-    """Return the first configured carrier matching a protocol, or the default."""
+    """Return the first matching protocol carrier, or the default."""
     for pattern, carrier in IR_CARRIERS.items():
         if pattern != "default" and fnmatch.fnmatchcase(protocol, pattern):
             return carrier
@@ -149,7 +170,11 @@ def set_online(client):
 
 def on_connect(client, userdata, flags, reason_code, properties=None):
     # paho 2.x passes a ReasonCode object, paho 1.x passes an int (0 = success)
-    failed = reason_code.is_failure if hasattr(reason_code, "is_failure") else reason_code != 0
+    failed = (
+        reason_code.is_failure
+        if hasattr(reason_code, "is_failure")
+        else reason_code != 0
+    )
     if failed:
         log.error("MQTT connect failed: %s", reason_code)
         return
@@ -195,7 +220,12 @@ def handle_command(client, payload):
     args.extend(["-c", str(carrier_for_protocol(BUTTON_TO_PROTOCOL[button]))])
 
     try:
-        result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
     except subprocess.TimeoutExpired:
         log.error("ir-ctl timed out: %s", args)
         client.publish(state_topic(), f"timeout: {repeat} {button}")
@@ -205,7 +235,11 @@ def handle_command(client, payload):
         log.info("OK: %s x%d %s", IR_DEVICE, repeat, button)
         client.publish(state_topic(), f"ok: {repeat} {button}")
     else:
-        log.error("ir-ctl failed (%s): %s", result.returncode, result.stderr.strip())
+        log.error(
+            "ir-ctl failed (%s): %s",
+            result.returncode,
+            result.stderr.strip(),
+        )
         client.publish(state_topic(), f"error: {repeat} {button}")
 
 
@@ -236,10 +270,14 @@ def main():
     try:
         client.loop_forever()  # handles reconnects
     except KeyboardInterrupt:
-        client.publish(AVAILABILITY_TOPIC, "offline", qos=1, retain=True).wait_for_publish()
+        client.publish(
+            AVAILABILITY_TOPIC,
+            "offline",
+            qos=1,
+            retain=True,
+        ).wait_for_publish()
         client.disconnect()
 
 
 if __name__ == "__main__":
     main()
-
